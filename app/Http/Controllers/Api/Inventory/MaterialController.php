@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Http\Controllers\Api\Inventory;
+
+use Illuminate\Http\Request;
+use App\Models\Material;
+use App\Services\Inventory\MaterialService;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\Api\Inventory\MaterialResource;
+
+class MaterialController extends Controller
+
+{
+    public function index(Request $request, MaterialService $service)
+    {
+        $materials = $service->getAllMaterials($request->all());
+        $resourceCollection = MaterialResource::collection($materials);
+        return $this->successResponse($resourceCollection, 'Material retrieved successfully');
+    }
+
+    private function calculateStatus(int $jumlah): string
+    {
+        if ($jumlah === 0) {
+            return 'OUT_OF_STOCK';
+        }
+        if ($jumlah <= 10) {
+            return 'LOW_STOCK';
+        }
+        return 'IN_STOCK';
+    }
+
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'kode_material' => 'required|unique:material',
+            'nama_material' => 'required',
+            'satuan' => 'required',
+            'jumlah' => 'required',
+            'harga' => 'required',
+            'category' => 'required',
+        ]);
+
+        $validated['status'] = $this->calculateStatus($validated['jumlah']);
+
+        try {
+            $material = Material::create($validated);
+            return $this->successResponse(new MaterialResource($material), 'Material created successfully', 201);
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to create material', 500);
+        }
+    }
+
+    public function updateStock(Request $request, MaterialService $service, $id)
+    {
+        $validated = $request->validate([
+            'jumlah' => 'required|integer',
+        ]);
+
+        $material = Material::findOrFail($id);
+        $newStock = $material->jumlah + $validated['jumlah'];
+
+        $status = $this->calculateStatus($newStock);
+
+        try {
+            $material = $service->updateStock($id, $validated['jumlah'], $status);
+            return $this->successResponse(new MaterialResource($material), 'Material stock updated successfully');
+        } catch (\Exception $e) {
+            return $this->errorResponse('Failed to update material stock', 500);
+        }
+    }
+
+    public function show($id)
+    {
+        $material = Material::find($id);
+
+        if (!$material) {
+            return $this->errorResponse('Material not found', 404);
+        }
+
+        return $this->successResponse(new MaterialResource($material), 'Material retrieved successfully');
+    }
+}
