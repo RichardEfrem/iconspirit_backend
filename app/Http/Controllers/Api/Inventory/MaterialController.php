@@ -15,7 +15,13 @@ class MaterialController extends Controller
     {
         $materials = $service->getAllMaterials($request->all());
         $resourceCollection = MaterialResource::collection($materials);
+        // $stockcounts = $service->getStockCounts();
         return $this->successResponse($resourceCollection, 'Material retrieved successfully');
+    }
+
+    public function getStockCounts(MaterialService $service)
+    {
+        return $this->successResponse($service->getStockCounts(), 'Stock counts retrieved successfully');
     }
 
     private function calculateStatus(int $jumlah): string

@@ -27,4 +27,24 @@ class MaterialService
         $material->update(['status' => $status]);
         return $material;
     }
+
+    public function getStockCounts()
+    {
+        $query = Material::query();
+
+        return [
+            'low_stock' => (clone $query)
+                ->where('jumlah', '>', 0)
+                ->where('jumlah', '<=', 10)
+                ->count(),
+
+            'in_stock' => (clone $query)
+                ->where('jumlah', '>', 10)
+                ->count(),
+
+            'out_of_stock' => (clone $query)
+                ->where('jumlah', '=', 0)
+                ->count(),
+        ];
+    }
 }
