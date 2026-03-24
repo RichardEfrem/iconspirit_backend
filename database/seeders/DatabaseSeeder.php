@@ -25,6 +25,8 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             MaterialSeeder::class,
+            ProductSeeder::class,
+            FactoryLocationSeeder::class,
         ]);
         
     }
