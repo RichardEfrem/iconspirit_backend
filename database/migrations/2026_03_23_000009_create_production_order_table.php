@@ -13,6 +13,16 @@ return new class extends Migration
     {
         Schema::create('production_order', function (Blueprint $table) {
             $table->id();
+            $table->string('kode_spk')->unique();
+            $table->string('nama_customer');
+            $table->string('alamat_customer');
+            $table->date('tanggal_order');
+            // The Status Column
+            $table->string('status_id');
+            $table->foreign('status_id')
+                ->references('id')
+                ->on('production_statuses')
+                ->onUpdate('cascade'); // Allows you to rename status IDs if needed
             $table->timestamps();
         });
     }

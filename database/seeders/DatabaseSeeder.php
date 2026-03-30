@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use phpDocumentor\Reflection\Location;
 
 class DatabaseSeeder extends Seeder
 {
@@ -27,6 +28,10 @@ class DatabaseSeeder extends Seeder
             MaterialSeeder::class,
             ProductSeeder::class,
             FactoryLocationSeeder::class,
+            LocationTransitTimeSeeder::class,
+            StationSeeder::class,
+            TeamSeeder::class,
+            ProductionStatusSeeder::class,
         ]);
         
     }

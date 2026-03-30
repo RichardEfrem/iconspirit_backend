@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('location_transit_time', function (Blueprint $table) {
             $table->id();
-            $table->foreign('origin_station_id')->references('id')->on('station')->onDelete('cascade');
-            $table->foreign('destination_station_id')->references('id')->on('station')->onDelete('cascade');
+            $table->foreignId('origin_factory_id')->constrained('factory_location')->onDelete('cascade');
+            $table->foreignId('destination_factory_id')->constrained('factory_location')->onDelete('cascade');
             $table->integer('transit_time');
             $table->timestamps();
         });

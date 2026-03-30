@@ -15,22 +15,22 @@ class LocationTransitTimeSeeder extends Seeder
     {
         DB::table('location_transit_time')->insert([
             [
-                'origin_station_id' => 1,
-                'destination_station_id' => 2,
+                'origin_factory_id' => 1,
+                'destination_factory_id' => 2,
                 'transit_time' => 10,
                 'created_at' => now(),
                 'updated_at' => now()
             ],
             [
-                'origin_station_id' => 2,
-                'destination_station_id' => 3,
+                'origin_factory_id' => 2,
+                'destination_factory_id' => 3,
                 'transit_time' => 8,
                 'created_at' => now(),
                 'updated_at' => now()
             ],
             [
-                'origin_station_id' => 1,
-                'destination_station_id' => 3,
+                'origin_factory_id' => 1,
+                'destination_factory_id' => 3,
                 'transit_time' => 15,
                 'created_at' => now(),
                 'updated_at' => now()
