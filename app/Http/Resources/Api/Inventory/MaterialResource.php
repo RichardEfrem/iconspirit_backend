@@ -22,7 +22,7 @@ class MaterialResource extends JsonResource
         'jumlah' => $this->jumlah,
         'category' => $this->category,
         'harga' => $this->harga,
-        'status' => $this->status,
+        'status' => $this->jumlah <= 0 ? 'OUT_OF_STOCK' : ($this->jumlah <= 10 ? 'LOW_STOCK' : 'IN_STOCK'),
     ];
     }
 }

@@ -19,8 +19,8 @@ class ProductionStatusSeeder extends Seeder
                 'color' => 'blue',
             ],
             [
-                'id' => 'process',
-                'label' => 'Process',
+                'id' => 'await_material',
+                'label' => 'Await Material',
                 'color' => 'orange',
             ],
             [

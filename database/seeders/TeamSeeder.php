@@ -2,81 +2,42 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Faker\Factory as Faker;
 
 class TeamSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        $locations = [
-            'A' => ['id' => 1, 'kayu' => 6, 'cat' => 6, 'acc' => 1],
-            'B' => ['id' => 2, 'kayu' => 2, 'cat' => 2],
-            'C' => ['id' => 3, 'kayu' => 1, 'cat' => 1],
-        ];
-
-        $teamTypes = [
-            'kayu' => 'K',
-            'cat' => 'C',
-            'acc' => 'CC'
-        ];
-
         $now = Carbon::now();
         $teams = [];
+        $faker = Faker::create('id_ID');
 
-        foreach ($locations as $locCode => $locData) {
-            $locId = $locData['id'];
+        // Pabrik A Setup: 6 Kayu, 6 Cat, 3 Acc
+        $setup = [
+            ['station_id' => 1, 'count' => 6, 'suffix' => 'KA'],
+            ['station_id' => 2, 'count' => 6, 'suffix' => 'CAT'],
+            ['station_id' => 3, 'count' => 3, 'suffix' => 'ACC'],
+        ];
 
-            foreach ($teamTypes as $stationName => $teamCode) {
-                if (isset($locData[$stationName])) {
-                    $count = $locData[$stationName];
-                    
-                    // find the station_id
-                    $station = DB::table('station')
-                        ->where('factory_location_id', $locId)
-                        ->where('nama_station', $stationName)
-                        ->first();
+        $usedNames = [];
 
-                    if ($station) {
-                        for ($i = 1; $i <= $count; $i++) {
-                            $teams[] = [
-                                'kode_team' => $locCode . $teamCode . str_pad($i, 2, '0', STR_PAD_LEFT),
-                                'station_id' => $station->id,
-                                'created_at' => $now,
-                                'updated_at' => $now,
-                            ];
-                        }
-                    } else {
-                        // fallback if DB not populated, generate without station ID lookup but we assume it's there
-                        for ($i = 1; $i <= $count; $i++) {
-                            // Determine placeholder station ID based on StationSeeder
-                            $stationId = 1; // Default
-                            if ($locId === 1) {
-                                if ($stationName === 'kayu') $stationId = 1;
-                                else if ($stationName === 'cat') $stationId = 2;
-                                else if ($stationName === 'acc') $stationId = 3;
-                            } else if ($locId === 2) {
-                                if ($stationName === 'kayu') $stationId = 4;
-                                else if ($stationName === 'cat') $stationId = 5;
-                            } else if ($locId === 3) {
-                                if ($stationName === 'kayu') $stationId = 6;
-                                else if ($stationName === 'cat') $stationId = 7;
-                            }
+        foreach ($setup as $config) {
+            for ($i = 1; $i <= $config['count']; $i++) {
+                do {
+                    $firstName = strtoupper($faker->firstName);
+                    $kodeTeam = $firstName . '-' . $config['suffix'];
+                } while (in_array($kodeTeam, $usedNames));
 
-                            $teams[] = [
-                                'kode_team' => $locCode . $teamCode . str_pad($i, 2, '0', STR_PAD_LEFT),
-                                'station_id' => $stationId,
-                                'created_at' => $now,
-                                'updated_at' => $now,
-                            ];
-                        }
-                    }
-                }
+                $usedNames[] = $kodeTeam;
+                $teams[] = [
+                    'kode_team' => $kodeTeam,
+                    'station_id' => $config['station_id'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
         }
         

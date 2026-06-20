@@ -52,7 +52,10 @@ class ProductionOrderItemController extends Controller
     public function store(Request $request, ProductionOrderItemService $service)
     {
         try {
-            $result = $service->create($request->all());
+            $result = $service->create($request->only([
+                'production_order_id', 'product_id', 'production_order_item_section_id',
+                'panjang', 'tinggi', 'quantity', 'keterangan',
+            ]));
 
             return $this->successResponse($result, 'Production order item created successfully', 201);
         } catch (ValidationException $e) {
@@ -66,13 +69,27 @@ class ProductionOrderItemController extends Controller
     public function update(Request $request, ProductionOrderItemService $service, int $id)
     {
         try {
-            $result = $service->update($id, $request->all());
+            $result = $service->update($id, $request->only([
+                'product_id', 'production_order_item_section_id',
+                'panjang', 'tinggi', 'quantity', 'keterangan',
+            ]));
 
             return $this->successResponse($result, 'Production order item updated successfully');
         } catch (ModelNotFoundException $e) {
             return $this->errorResponse('Production order item not found', 404);
         } catch (ValidationException $e) {
             return $this->errorResponse('Validation failed', 422, $e->errors());
+        }
+    }
+
+    public function destroy(ProductionOrderItemService $service, int $id)
+    {
+        try {
+            $service->delete($id);
+
+            return $this->successResponse(null, 'Production order item deleted successfully');
+        } catch (ModelNotFoundException $e) {
+            return $this->errorResponse('Production order item not found', 404);
         }
     }
 }

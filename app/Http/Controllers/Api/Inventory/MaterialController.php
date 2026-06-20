@@ -7,6 +7,8 @@ use App\Models\Material;
 use App\Services\Inventory\MaterialService;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\Inventory\MaterialResource;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Validation\ValidationException;
 
 class MaterialController extends Controller
 
@@ -26,7 +28,7 @@ class MaterialController extends Controller
 
     private function calculateStatus(int $jumlah): string
     {
-        if ($jumlah === 0) {
+        if ($jumlah <= 0) {
             return 'OUT_OF_STOCK';
         }
         if ($jumlah <= 10) {
@@ -41,8 +43,8 @@ class MaterialController extends Controller
             'kode_material' => 'required|unique:material',
             'nama_material' => 'required',
             'satuan' => 'required',
-            'jumlah' => 'required',
-            'harga' => 'required',
+            'jumlah' => 'required|integer|min:0',
+            'harga' => 'required|integer|min:0',
             'category' => 'required',
         ]);
 
@@ -62,14 +64,13 @@ class MaterialController extends Controller
             'jumlah' => 'required|integer',
         ]);
 
-        $material = Material::findOrFail($id);
-        $newStock = $material->jumlah + $validated['jumlah'];
-
-        $status = $this->calculateStatus($newStock);
-
         try {
-            $material = $service->updateStock($id, $validated['jumlah'], $status);
+            $material = $service->updateStock($id, $validated['jumlah']);
             return $this->successResponse(new MaterialResource($material), 'Material stock updated successfully');
+        } catch (ModelNotFoundException $e) {
+            return $this->errorResponse('Material not found', 404);
+        } catch (ValidationException $e) {
+            return $this->errorResponse('Validation failed', 422, $e->errors());
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to update material stock', 500);
         }

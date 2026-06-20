@@ -27,13 +27,8 @@ class FactoryLocation extends Model
         return $this->hasMany(Station::class, 'factory_location_id');
     }
 
-    public function originTransitTimes(): HasMany
+    public function spkAssignments(): HasMany
     {
-        return $this->hasMany(LocationTransitTime::class, 'origin_factory_id');
-    }
-
-    public function destinationTransitTimes(): HasMany
-    {
-        return $this->hasMany(LocationTransitTime::class, 'destination_factory_id');
+        return $this->hasMany(Spk::class, 'assigned_factory');
     }
 }
