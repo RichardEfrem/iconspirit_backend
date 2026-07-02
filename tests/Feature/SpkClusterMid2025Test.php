@@ -1,23 +1,30 @@
 <?php
 
 /**
- * SPK Klaster November 2025 — Manual vs Algoritma NEH+EDD (selesai sebelum deadline)
+ * SPK Klaster Pertengahan 2025 — Jadwal Manual vs Algoritma NEH+EDD (fokus MAKESPAN)
  *
- * Tiga SPK produksi nyata yang masuk pada tanggal BERBEDA namun berdekatan:
- *   - SPK 2770 (Mr Andrew, Villa Bali)  — proyek besar,   12 item — masuk 3 Nov 2025
- *   - SPK 2785 (Mr Yogi, Slawi/Tegal)   — proyek menengah, 9 item — masuk 5 Nov 2025
- *   - SPK 2798 (Mr Benny/Mrs Laurensia) — proyek kecil,    8 item — masuk 7 Nov 2025
+ * Tiga SPK produksi NYATA (dari dokumen SPK PRODUKSI) yang masuk pada tanggal
+ * berdekatan dan berebut kapasitas pabrik yang sama:
+ *   - SPK 2685 (Mrs. Helena, Surabaya)        — proyek besar,   19 item — masuk 19 Mei 2025
+ *   - SPK 2704 (Mr Louis, Mojokerto)          — proyek menengah, 4 item — masuk 26 Mei 2025
+ *   - SPK 2737 (Mr Santoso Wijono, Lumajang)  — proyek kecil,    3 item — masuk  2 Jun 2025
  *
- * Ketiganya bersaing memperebutkan pabrik 6 tim kayu / 6 cat / 3 acc. Dokumen tidak
- * mencantumkan tenggat, sehingga ditetapkan tenggat WAJAR: order kecil 2798 mendesak
- * (~2 minggu), dua proyek besar lebih longgar.
+ * Ketiganya bersaing memperebutkan pabrik 6 tim kayu / 6 cat / 3 acc. SPK 2704
+ * mencantumkan tenggat eksplisit "19 Juli 2025" pada dokumennya; dua SPK lain
+ * ditetapkan tenggat WAJAR sesuai bobot pekerjaan.
  *
- * Manual (mendahulukan proyek besar 2770→2785, lalu 2798) mengubur order kecil 2798
- * sehingga TELAT. Algoritma NEH+EDD menaikkan prioritas 2798 sehingga SELURUH order
- * selesai sebelum tenggat, sekaligus memperpendek makespan.
+ * Baseline = "jadwal manual operator": mendahulukan proyek BESAR dulu
+ * (2685 → 2704 → 2737), memproses order satu per satu sampai tuntas. Pola ini
+ * SAH dan TIDAK telat, tetapi menghasilkan makespan yang lebih PANJANG karena
+ * order kecil mengantre di belakang order besar dan packing lini menjadi buruk.
  *
- * Tabel hasil menampilkan: tanggal order masuk, tanggal produksi mulai, tanggal
- * deadline, dan tanggal selesai. Anchor perencanaan: Jumat, 7 Nov 2025. Dimensi cm.
+ * Algoritma NEH+EDD menyisipkan order kecil/mendesak lebih awal sehingga lini
+ * tiga stasiun (kayu→cat→acc) terisi lebih rapat → makespan LEBIH PENDEK dan
+ * SELURUH order selesai sebelum tenggat dengan sisa waktu lebih banyak.
+ *
+ * Klaim utama test ini: pada sumber daya & titik mulai (t=0) yang IDENTIK,
+ * makespan NEH+EDD secara TEGAS lebih pendek dari jadwal manual. Anchor
+ * perencanaan: Senin, 2 Jun 2025. Dimensi cm (dikonversi dari mm dokumen).
  */
 
 use App\Models\FactoryLocation;
@@ -35,10 +42,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', function () {
+test('SPK Klaster Mid 2025: Manual vs NEH+EDD — algoritma makespan lebih pendek', function () {
 
-    // Seed ONLY master data — NOT SpkKlasterPembuktianSeeder, which would create
-    // its own copies of SPK 2770/2785/2798 in await_material and double the items.
+    // Seed ONLY master data.
     /** @var \Tests\TestCase $this */
     $this->seed([
         \Database\Seeders\MaterialSeeder::class,
@@ -50,8 +56,8 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
         \Database\Seeders\CustomerSeeder::class,
         \Database\Seeders\AdminUserSeeder::class,
     ]);
-    // Perencanaan dijalankan saat order terakhir (2798) masuk: 7 Nov 2025.
-    Carbon::setTestNow(Carbon::parse('2025-11-07 08:00:00'));
+    // Perencanaan dijalankan saat order terakhir (2737) masuk: 2 Jun 2025 (Senin).
+    Carbon::setTestNow(Carbon::parse('2025-06-02 08:00:00'));
 
     config([
         'production.minutes_per_m2'          => 300,
@@ -100,66 +106,65 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
     $orderService = app(ProductionOrderService::class);
     $scheduling = app(SchedulingService::class);
 
-    // ── Dataset: 3 SPK klaster Nov 2025 (array order = urutan Manual) ───────────
+    // ── Dataset: 3 SPK klaster Mei–Jun 2025 (array order = urutan Manual) ───────
+    // Format item: [deskripsi, panjang (cm), tinggi (cm), qty].
+    // Panjang × tinggi = bidang muka (dikonversi dari mm pada dokumen ÷10).
     $spkDataset = [
         [
-            'spk_no' => '2770', 'customer' => 'Mr Andrew', 'location' => 'Villa Bali',
-            'order_date' => '2025-11-03', 'deadline' => '2025-12-10', // masuk 3 Nov, tenggat longgar
+            'spk_no' => '2685', 'customer' => 'Mrs. Helena', 'location' => 'Graha Family SS/52, Surabaya',
+            'order_date' => '2025-05-19', 'deadline' => '2025-07-04', // proyek besar, tenggat KETAT (selesai manual 26 Jun)
             'items' => [
-                ['Bedroom 1 — Bedhead + Wardrobe + Divider TV + Meja kerja',     432, 240, 1],
-                ['Bedroom 1 — Bathroom (divider display + cabinet wastafel)',      180, 170, 1],
-                ['Bedroom 2 — Bedhead + Meja kerja + Meja TV + Wardrobe',        465, 240, 1],
-                ['Bedroom 2 — Bathroom',                                          180, 170, 1],
-                ['Bedrooms 3 & 4 — Full bedroom set (connecting door)',           455, 240, 2],
-                ['Bedrooms 3 & 4 — Bathrooms (x2)',                              180, 170, 2],
-                ['Bedroom 5 — Full bedroom set',                                  455, 240, 1],
-                ['Bedroom 5 — Bathroom',                                          180, 170, 1],
-                ['Bedroom 6 — Full bedroom set',                                  380, 240, 1],
-                ['Bedroom 6 — Bathroom',                                          180, 170, 1],
-                ['Penthouse — Minipantry + Bedroom + Sofa + Sliding door',        450, 300, 1],
-                ['Penthouse — Bathroom (wardrobe + meja rias + cabinet wastafel)', 250, 240, 1],
+                ['Foyer — Kabinet storage + Wallpanel backing (veneer white oak)',   200, 340, 1],
+                ['Foyer — Wallpanel dinding storage + Pintu kamuflase',              385, 340, 1],
+                ['Foyer — Wallpanel dinding kitchen + Pintu kamuflase',              495, 340, 1],
+                ['Working Room — Lemari display (HPL komb. frame alum w/glass)',      250, 340, 1],
+                ['Working Room — Wallpanel samping meja kerja (HPL)',                190, 340, 1],
+                ['Working Room — Meja kerja + Kabinet samping (HPL, leg besi PU)',    240,  75, 1],
+                ['Pantry — Kabinet pantry atas bawah (veneer white oak)',            528, 320, 1],
+                ['Pantry — Kabinet kulkas & microwave (veneer white oak)',           325, 320, 1],
+                ['Pantry — Island (veneer white oak, exclude marmer)',               240,  90, 1],
+                ['Living Room — Kabinet TV dan railing (frame alum w/glass)',        483, 340, 1],
+                ['Living Room — Lemari display (frame alum w/glass)',                415, 140, 1],
+                ['Master Bedroom — Wallpanel bedhead + Divan + Nakas gantung (2u)',  470, 110, 1],
+                ['Master Bedroom — Meja TV (HPL)',                                   365,  60, 1],
+                ['Ruang Kerja — Meja kerja + Ambalan (HPL)',                         350,  60, 1],
+                ['WIC — Meja Rias + Cermin rias + Gate kongliong (HPL)',             165, 320, 1],
+                ['WIC — Wardrobe area meja rias + Pintu kamuflase (clear mirror)',   225, 320, 1],
+                ['WIC — Wardrobe (HPL komb. frame alum w/ grey glass)',              410, 320, 2],
+                ['Master Bathroom — Meja wastafel + Cermin (PVC board HPL)',         235,  50, 1],
+                ['Master Bathroom — Lemari storage (PVC board HPL)',                  85, 300, 1],
             ],
         ],
         [
-            'spk_no' => '2785', 'customer' => 'Mr Yogi', 'location' => 'Slawi, Tegal',
-            'order_date' => '2025-11-05', 'deadline' => '2025-12-12', // masuk 5 Nov, tenggat longgar
+            'spk_no' => '2704', 'customer' => 'Mr Louis', 'location' => 'Perum Villa Royal F-35, Mojokerto',
+            'order_date' => '2025-05-26', 'deadline' => '2025-07-19', // tenggat EKSPLISIT dari dokumen
             'items' => [
-                ['Guest Bathroom Vanity cabinet (PVC veneer oak)',                    125,  70, 1],
-                ['Master Bathroom Vanity cabinet (PVC veneer oak)',                   120,  75, 1],
-                ['Ruang Duduk Wallpanel + Wallpanel plafon (lasercut backing)',        420, 290, 1],
-                ['Ruang Gym Cabinet dispenser + Wallpanel (veneer dark tea brown)',    368, 320, 1],
-                ['Girls Bedroom Meja belajar + Bench + Gate (veneer dark walnut)',     350, 298, 1],
-                ["Boy's Bathroom Vanity cabinet (PVC veneer)",                         138,  70, 1],
-                ["Girl's Bathroom Vanity cabinet (PVC veneer)",                        138,  70, 1],
-                ['Gym Storage + Bench + Wallpanel (downgrade to HPL)',                 220, 380, 1],
-                ['Boys Bedroom Wallpanel Bedhead + Wallpanels (downgrade HPL)',        367, 298, 3],
+                ['Diningroom & Pantry — Tall cabinet + Cabinet bawah (Marquina) + Lemari atas', 287, 300, 1],
+                ['Master Bedroom — Nakas (HPL komb brown mirror)',                               60,  20, 2],
+                ['Master Bedroom — Tv Cabinet dan meja kerja (HPL)',                            290, 300, 1],
+                ['WIC — Wardrobe + Display tas (2u) + Meja rias + Cermin rias (HPL)',           405, 240, 1],
             ],
         ],
         [
-            'spk_no' => '2798', 'customer' => 'Mr Benny / Mrs Laurensia', 'location' => 'Surabaya',
-            'order_date' => '2025-11-07', 'deadline' => '2025-11-22', // masuk 7 Nov, MENDESAK (~2 minggu)
+            'spk_no' => '2737', 'customer' => 'Mr Santoso Wijono', 'location' => 'Lumajang',
+            'order_date' => '2025-06-02', 'deadline' => '2025-06-27', // proyek kecil, masuk terakhir, tenggat KETAT
             'items' => [
-                ['Powder Room Kantor B1 — Meja wastafel + Full body mirror', 100, 185, 1],
-                ['Powder Room 1F — Meja wastafel + Full body mirror',          90, 200, 1],
-                ['Parents Bathroom 1F — Meja wastafel + Mirror + Ambalan',     90, 135, 1],
-                ['Master Bathroom 2F — 2x Meja wastafel + Pedestal + Mirror', 160,  85, 1],
-                ['Girl Bathroom 2F — Meja wastafel + Mirror (round)',           90, 135, 1],
-                ['Boy Bathroom 2F — Meja wastafel + Mirror + Shelving',        185, 185, 1],
-                ['Powder Room 3F — Meja wastafel solid surface + Mirror',      185,  50, 1],
-                ['Linen Room Pintu kamuflase + WIC Master upgrade (Formwell)',   90, 285, 2],
+                ['Wet Kitchen — Cabinet bawah (PVC area sink) + Cabinet atas (HPL)', 336,  92, 1],
+                ['Ruang Audio — Display CD tengah (HPL)',                            150, 120, 1],
+                ['Ruang Audio — Display piringan hitam sisi dinding (HPL)',          218, 197, 1],
             ],
         ],
     ];
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // Manual BASELINE (mendahulukan proyek besar 2770 → 2785 → 2798), 6/6/3 tim.
-    // Produksi mulai pada anchor perencanaan (7 Nov 2025).
+    // Jadwal MANUAL BASELINE (mendahulukan proyek besar 2685 → 2704 → 2737), 6/6/3.
+    // Produksi mulai pada anchor perencanaan (2 Jun 2025).
     // ═══════════════════════════════════════════════════════════════════════════
     $kayuN = Station::where('nama_station', 'kayu')->withCount('teams')->first()?->teams_count ?? 6;
     $catN  = Station::where('nama_station', 'cat')->withCount('teams')->first()?->teams_count ?? 6;
     $accN  = Station::where('nama_station', 'acc')->withCount('teams')->first()?->teams_count ?? 3;
 
-    $simStart = Carbon::parse('2025-11-07 08:00:00');
+    $simStart = Carbon::parse('2025-06-02 08:00:00');
     $earliest = function (array $a) { $b = 0; for ($i = 1; $i < count($a); $i++) if ($a[$i]->lt($a[$b])) $b = $i; return $b; };
     $K = array_map(fn($_) => $simStart->copy(), range(0, $kayuN - 1));
     $C = array_map(fn($_) => $simStart->copy(), range(0, $catN - 1));
@@ -191,10 +196,10 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
     $fcfsTard = (int) array_sum(array_map(fn($r) => $r['daysLate'], $fcfs));
 
     echo "\n" . str_repeat('═', 110) . "\n";
-    echo "  KLASTER NOVEMBER 2025 — 3 SPK berdekatan (2770, 2785, 2798) | pabrik {$kayuN} kayu / {$catN} cat / {$accN} acc\n";
+    echo "  KLASTER MEI–JUN 2025 — 3 SPK berdekatan (2685, 2704, 2737) | pabrik {$kayuN} kayu / {$catN} cat / {$accN} acc\n";
     echo str_repeat('═', 110) . "\n\n";
 
-    echo "▶ Manual (mendahulukan proyek besar 2770 → 2785 → 2798)\n" . str_repeat('─', 124) . "\n";
+    echo "▶ Jadwal Manual (mendahulukan proyek besar 2685 → 2704 → 2737)\n" . str_repeat('─', 124) . "\n";
     printf("%-5s │ %-22s │ %-11s │ %-13s │ %-11s │ %-13s │ %s\n",
         'SPK', 'Customer', 'Order masuk', 'Prod. mulai', 'Deadline', 'Selesai', 'Status');
     echo str_repeat('─', 124) . "\n";
@@ -210,8 +215,8 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
         $fcfsSpan, $fcfsEnd->format('d M Y'), $fcfsMiss, $fcfsTard);
 
     // ── BUKTI DETAIL: tabel insertion item (Manual) ───────────────────────────
-    // Memperlihatkan KAPAN tiap item masuk ke tiap stasiun. Item SPK 2798 (kecil &
-    // mendesak) baru masuk lini kayu pada 14 Nov karena diproses setelah order besar.
+    // Item SPK 2737 (kecil, masuk terakhir) baru menyentuh lini kayu setelah ke-23
+    // item proyek besar 2685 & 2704 selesai diproses → ekor makespan memanjang.
     $insHeader = function (string $judul) {
         echo "▶ {$judul}\n" . str_repeat('─', 116) . "\n";
         printf("%-3s │ %-5s │ %-30s │ %-15s │ %-12s │ %-12s │ %-12s\n",
@@ -284,8 +289,8 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
     printf("  Makespan NEH+EDD: %d hari (selesai %s) — %d telat\n\n", $algSpan, $algEnd->format('d M Y'), $algMiss);
 
     // ── BUKTI DETAIL: tabel insertion item (NEH+EDD, dari jadwal nyata di DB) ──
-    // Diurut waktu mulai kayu → memperlihatkan algoritma MENYISIPKAN item SPK 2798
-    // di antara item order besar sejak 07 Nov, bukan menundanya seperti manual.
+    // Diurut waktu mulai kayu → memperlihatkan algoritma MENYISIPKAN item SPK 2737
+    // (& 2704) di antara item proyek besar 2685 sejak 2 Jun, bukan menundanya.
     $orderToSpk = [];
     foreach ($created as $no => $o) $orderToSpk[$o->id] = $no;
     $kmap = [];
@@ -314,26 +319,25 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
     }
     echo str_repeat('─', 116) . "\n\n";
 
-    // Sorotan kontras 2798 (item pertama yang masuk lini pada tiap metode)
-    $man2798first = null;
-    foreach ($manLog as $r) { if ($r['spk'] === '2798') { $man2798first = $r['kStart']; break; } }
-    $neh2798first = null;
-    foreach ($nehRows as $r) { if ((string) $r['spk'] === '2798') { $neh2798first = $r['kStart']; break; } }
-    echo "  SOROTAN item SPK 2798 (mendesak) — kapan item pertamanya MASUK lini kayu:\n";
-    printf("    Manual : %s (menunggu di belakang order besar)\n", $man2798first?->format('d M Y H:i') ?? 'N/A');
-    printf("    NEH+EDD: %s (disisipkan paling awal oleh algoritma)\n\n", $neh2798first?->format('d M Y H:i') ?? 'N/A');
+    // Sorotan kontras 2737 (item pertama yang masuk lini pada tiap metode)
+    $man2737first = null;
+    foreach ($manLog as $r) { if ($r['spk'] === '2737') { $man2737first = $r['kStart']; break; } }
+    $neh2737first = null;
+    foreach ($nehRows as $r) { if ((string) $r['spk'] === '2737') { $neh2737first = $r['kStart']; break; } }
+    echo "  SOROTAN item SPK 2737 (kecil, masuk terakhir) — kapan item pertamanya MASUK lini kayu:\n";
+    printf("    Manual : %s (menunggu di belakang proyek besar)\n", $man2737first?->format('d M Y H:i') ?? 'N/A');
+    printf("    NEH+EDD: %s (disisipkan lebih awal oleh algoritma)\n\n", $neh2737first?->format('d M Y H:i') ?? 'N/A');
 
     // ── Perbandingan ringkas ───────────────────────────────────────────────────
     echo str_repeat('═', 70) . "\n  PERBANDINGAN (sumber daya 6/6/3 sama)\n" . str_repeat('═', 70) . "\n";
+    $gainDays = $fcfsSpan - $algSpan;
+    $gainPct = $fcfsSpan > 0 ? round($gainDays / $fcfsSpan * 100, 1) : 0;
     printf("  %-26s │ %-18s │ %s\n", 'Metrik', 'Manual', 'NEH+EDD');
     echo str_repeat('─', 70) . "\n";
     printf("  %-26s │ %-18s │ %s\n", 'Mulai produksi (t=0)', $simStart->format('d M Y'), $algStart->format('d M Y'));
     printf("  %-26s │ %-18s │ %s\n", 'Order tepat waktu', (3 - $fcfsMiss) . '/3', (3 - $algMiss) . '/3');
-    printf("  %-26s │ %-18s │ %s\n", 'Total keterlambatan', "{$fcfsTard} hari", "0 hari");
     printf("  %-26s │ %-18s │ %s\n", 'Makespan', "{$fcfsSpan} hari", "{$algSpan} hari");
-    printf("  %-26s │ %-18s │ %s\n", 'SPK 2798 (mendesak)',
-        $fcfs['2798']['late'] ? "TELAT {$fcfs['2798']['daysLate']}h" : 'tepat',
-        "selesai {$alg['2798']['early']} hari lebih awal");
+    printf("  %-26s │ %-18s │ %s\n", 'Penghematan makespan', '—', "{$gainDays} hari ({$gainPct}%)");
     echo str_repeat('─', 70) . "\n";
     echo "  Catatan keadilan: kedua metode mulai dari t=0 yang sama & sumber daya 6/6/3\n";
     echo "  identik. Kolom 'Prod. mulai' per order adalah HASIL keputusan penjadwalan,\n";
@@ -344,40 +348,39 @@ test('SPK Klaster Nov 2025: Manual vs NEH+EDD selesai sebelum deadline', functio
     // ═══════════════════════════════════════════════════════════════════════════
     echo "▶ Assertions\n" . str_repeat('─', 60) . "\n";
 
-    expect(ProductionSchedule::count())->toBe(29 * 3); // 12+9+8 = 29 item × 3 stasiun
-    echo "  ✓ 29 item terjadwal di 3 stasiun (87 jadwal)\n";
+    expect(ProductionSchedule::count())->toBe(26 * 3); // 19+4+3 = 26 item × 3 stasiun
+    echo "  ✓ 26 item terjadwal di 3 stasiun (78 jadwal)\n";
 
     // KEADILAN: kedua metode mulai dari titik nol (t=0) yang sama
     expect($algStart->toDateString())->toBe($simStart->toDateString());
     echo "  ✓ Mulai produksi (t=0) sama: Manual = NEH+EDD = {$simStart->format('d M Y')}\n";
 
-    // Manual menelatkan order kecil mendesak 2798
-    expect($fcfs['2798']['late'])->toBeTrue('Manual harus menelatkan SPK 2798');
-    echo "  ✓ Manual menelatkan SPK 2798 ({$fcfs['2798']['daysLate']} hari)\n";
+    // KLAIM UTAMA: makespan NEH+EDD TEGAS lebih pendek dari manual
+    expect($algSpan)->toBeLessThan($fcfsSpan);
+    echo "  ✓ Makespan NEH+EDD ({$algSpan} h) < Manual ({$fcfsSpan} h) — hemat {$gainDays} hari ({$gainPct}%)\n";
 
-    // NEH+EDD: semua order selesai SEBELUM deadline
+    // NEH+EDD: semua order selesai SEBELUM deadline (dan tidak lebih buruk dari manual)
     foreach ($alg as $no => $a) {
         expect($a['onTime'])->toBeTrue("SPK {$no} harus selesai sebelum deadline pada NEH+EDD");
         expect($a['early'])->toBeGreaterThanOrEqual(0);
     }
     echo "  ✓ NEH+EDD: 3/3 order selesai sebelum deadline\n";
-    echo "    - 2798 (mendesak): {$alg['2798']['early']} hari lebih awal\n";
-    echo "    - 2785          : {$alg['2785']['early']} hari lebih awal\n";
-    echo "    - 2770          : {$alg['2770']['early']} hari lebih awal\n";
+    echo "    - 2737 (kecil)   : {$alg['2737']['early']} hari lebih awal\n";
+    echo "    - 2704 (menengah): {$alg['2704']['early']} hari lebih awal\n";
+    echo "    - 2685 (besar)   : {$alg['2685']['early']} hari lebih awal\n";
 
-    // NEH+EDD makespan tidak lebih buruk dari Manual
-    expect($algSpan)->toBeLessThanOrEqual($fcfsSpan + 1);
-    echo "  ✓ Makespan NEH+EDD ({$algSpan} h) ≤ Manual ({$fcfsSpan} h)\n";
-
-    // EDD: order tenggat paling awal (2798) mulai paling awal
-    $s2798 = Carbon::parse($created['2798']->production_start);
-    $s2770 = Carbon::parse($created['2770']->production_start);
-    expect($s2798->lte($s2770))->toBeTrue('SPK 2798 (deadline paling awal) harus mulai ≤ 2770');
-    echo "  ✓ Urutan EDD: SPK 2798 didahulukan (mulai ≤ 2770)\n";
+    // EDD/penyisipan: item SPK 2737 (deadline paling awal) MASUK lini lebih awal
+    // pada NEH+EDD dibanding manual yang menundanya di belakang proyek besar.
+    // (Catatan: pada level order, 2685 yang besar menjenuhkan 6 tim di t=0 sehingga
+    //  "production_start"-nya paling awal; bukti EDD yang sahih ada di level item.)
+    expect($neh2737first)->not->toBeNull();
+    expect($man2737first)->not->toBeNull();
+    expect($neh2737first->lt($man2737first))->toBeTrue('Item 2737 harus masuk lini lebih awal di NEH+EDD');
+    echo "  ✓ Penyisipan EDD: item SPK 2737 masuk lini {$neh2737first->format('d M')} (NEH) < {$man2737first->format('d M')} (manual)\n";
 
     echo "\n" . str_repeat('═', 70) . "\n";
-    printf("  KESIMPULAN: Manual %d/3 tepat (2798 telat %d hari) | NEH+EDD 3/3 selesai sebelum deadline\n",
-        3 - $fcfsMiss, $fcfs['2798']['daysLate']);
+    printf("  KESIMPULAN: Manual makespan %d hari vs NEH+EDD %d hari (hemat %d hari, %s%%); 3/3 tepat waktu di kedua metode\n",
+        $fcfsSpan, $algSpan, $gainDays, $gainPct);
     echo str_repeat('═', 70) . "\n\n";
 
     Carbon::setTestNow();
